@@ -13,19 +13,19 @@ class PropertyScraper:
         self.session = requests.Session()
         self.script = self.get_script_data()
 
-    def get_script_data(self):
+    def get_script_data(self):#Here is the script obtained, which contains all the required data.
         response = self.session.get(self.url, headers=self.headers)
         soup = BeautifulSoup(response.text, features="lxml")
         script = soup.find('script', id='__NEXT_DATA__').text
         return script
 
-    def get_total_properties(self, script):
+    def get_total_properties(self, script): #The number of properties that can be obtained is analyzed.
         script_json = json.loads(script)
         data = script_json["props"]["pageProps"]["searchResult"]
         totalProperties = data["meta"]["total_count"]
         return totalProperties
 
-    def get_properties_for_page(self, page):
+    def get_properties_for_page(self, page): #Here, the paginated URLs are formed and the new information is sent.
         urlPage = f"{self.url}&page={page}"
         resp = self.session.post(urlPage, headers=self.headers)
         soup = BeautifulSoup(resp.text, features="lxml")
@@ -34,7 +34,7 @@ class PropertyScraper:
         data = script_json["props"]["pageProps"]["searchResult"]["listings"]
         return data
 
-    def extract_property_details(self, prop):
+    def extract_property_details(self, prop): #All the desired information is obtained.
         prop = prop["property"]
         propertyId = prop["id"]
         propertyName = prop["title"]
@@ -57,7 +57,7 @@ class PropertyScraper:
         }
         return result
 
-    def get_all_properties(self):
+    def get_all_properties(self): #All the necessary functions are called to make it work correctly.
         script_data = self.script
         totalProperties = self.get_total_properties(script_data)
         perPage = 25
@@ -74,28 +74,25 @@ class PropertyScraper:
                 results.append(result)
         return results
 
-    # def save_results_to_json(self, results, filename):
+    # def save_results_to_json(self, results, filename): #For JSON Format
     #     with open(filename, 'a') as json_file:
     #         json.dump(results, json_file, indent=4)
 
 
-    def save_results_to_csv(self, results, filename):
+    def save_results_to_csv(self, results, filename): #For CSV Format
         with open(filename, 'a', newline='', encoding='utf-8') as csv_file:
             fieldnames = ["PropertyId", "PropertyUrl", "PropertyName", "PropertyDirection", "imageUri", "Price",
                           "Bedrooms", "Bathrooms", "WebPage"]
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-
-            # Verificar si el archivo CSV está vacío para escribir la cabecera solo una vez
-            csv_file.seek(0, 2)  # Ir al final del archivo
-            if csv_file.tell() == 0:  # Si el archivo está vacío
+            # Checking if the CSV file is empty to write the header only once.
+            csv_file.seek(0, 2)
+            if csv_file.tell() == 0:
                 writer.writeheader()
-
-            # Escribir los datos en el archivo CSV
             writer.writerows(results)
 
 
-# Uso de las clases
-url_page = 'https://www.propertyfinder.ae/en/search?l=13&c=2&t=35&fu=0&rp=y&ob=mr'
+# Classes are called
+url_page = 'https://www.propertyfinder.ae/en/search?l=13&c=2&t=35&fu=0&rp=y&ob=mr' #Url
 scraper = PropertyScraper(url_page)
 properties = scraper.get_all_properties()
 scraper.save_results_to_csv(properties, 'UAEProperty.csv')
