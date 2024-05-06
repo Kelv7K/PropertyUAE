@@ -15,24 +15,25 @@ class PropertyScraper:
         self.session = requests.Session()
         self.script = self.get_script_data()
 
-    def get_script_data(self):#Here is the script obtained, which contains all the required keys for the API.
+    def get_script_data(self):  # Here is the script obtained, which contains all the required keys for the API.
         response = self.session.get(self.url, headers=self.headers)
         soup = BeautifulSoup(response.text, features="lxml")
         script = soup.find('script', id='__NEXT_DATA__').text
         return script
 
-    def get_city_id(self, script):#City Key is obtained
+    def get_city_id(self, script):  # City Key is obtained
+        cityName = "Dubai" #Here we can changed the city location
         script_json = json.loads(script)
         city_ids = script_json["props"]["pageProps"]["reduxWrapperActionsGIPP"]
         for city_id in city_ids:
             if city_id["type"] == "listings/fetchPropertySEOLinks/fulfilled":
                 cities = city_id["payload"]["links"]["browse_in"]["urls"]
                 for city in cities:
-                    if city["title"] == "Dubai":
+                    if city["title"] == cityName:
                         return re.search(r"city\.id=(\d+)", city["algolia_params"]["filterString"]).group(1)
         return None
 
-    def get_properties_for_page(self, city_id, page):#The API is constructed and the result of the request is sent.
+    def get_properties_for_page(self, city_id, page):  # The API is constructed and the result of the request is sent.
         algoliaKey = (re.search(r'"algolia_app_key":"([^"]+)"', self.script)).group(1)
         algoliaId = (re.search(r'"algolia_app_id":"([^"]+)"', self.script)).group(1)
         urlApi = f"https://{algoliaId}-dsn.algolia.net/1/indexes/*/queries?x-algolia-api-key={algoliaKey}&x-algolia-application-id={algoliaId}"
@@ -47,10 +48,14 @@ class PropertyScraper:
         }
         resp = self.session.post(urlApi, json=payload, headers=self.headers)
         data = resp.json()
-        data = data["results"][0]["hits"]
+        data = data["results"][0]
         return data
 
-    def extract_property_details(self, prop): #All the desired information is obtained.
+    def get_total_properties(self, data):  # The number of properties that can be obtained is analyzed.
+        totalProperties = data["nbHits"]
+        return totalProperties
+
+    def extract_property_details(self, prop):  # All the desired information is obtained.
         propertyId = prop["id"]
         propertyName = prop["name"]["en"]
         propertyUrl = prop["short_url"]
@@ -68,33 +73,32 @@ class PropertyScraper:
             "Price": price,
             "Bedrooms": bedrooms,
             "Bathrooms": bathrooms,
-            "WebPage":"Dubizzle"
+            "WebPage": "Dubizzle"
         }
         return result
 
-    def get_properties(self, city_id):#All the necessary functions are called to make it work correctly.
+    def get_properties(self, city_id):  # All the necessary functions are called to make it work correctly.
         results = []
-        totalProperties = 0
         perPage = 1000
         page = 0
-        while True:
-            data = self.get_properties_for_page(city_id, page)
-            if not data:
-                break
-            if totalProperties == 0:
-                totalProperties = len(data)
-            results += [self.extract_property_details(prop) for prop in data]
-            page += 1
+        data = self.get_properties_for_page(city_id, page)
+        totalProperties = self.get_total_properties(data)
+        totalRequests = math.ceil(totalProperties / perPage)
         print("TOTAL Properties: ", totalProperties)
         print("Properties per Page: ", perPage)
-        print("TOTAL Request: ", page)
+        print("TOTAL Request: ", totalRequests)
+        for page in range(0, totalRequests):
+            data = self.get_properties_for_page(city_id, page)
+            print(f"Properties found {len(data["hits"])} on page {f"{self.url}&page={page}"}")
+            results += [self.extract_property_details(prop) for prop in data["hits"]]
+            page += 1
         return results
 
     # def save_results_to_json(self, results, filename): #JSON Format
     #     with open(filename, 'a') as json_file:
     #         json.dump(results, json_file, indent=4)
 
-    def save_results_to_csv(self, results, filename):#For CSV Format
+    def save_results_to_csv(self, results, filename):  # For CSV Format
         with open(filename, 'a', newline='', encoding='utf-8') as csv_file:
             fieldnames = ["PropertyId", "PropertyUrl", "PropertyName", "PropertyDirection", "imageUri", "Price",
                           "Bedrooms", "Bathrooms", "WebPage"]
